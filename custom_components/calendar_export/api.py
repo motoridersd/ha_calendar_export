@@ -1,6 +1,7 @@
 """API for calendar export."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+from hashlib import sha256
 from http import HTTPStatus
 
 import pytz
@@ -15,6 +16,13 @@ from homeassistant.components.todo import (
     TodoListEntity,
 )
 from icalendar import Calendar, Event, Todo
+
+
+def uid(*args):
+    m = sha256()
+    for arg in args:
+        m.update(str(arg).encode())
+    return m.hexdigest()
 
 
 class CalendarExportAPI(http.HomeAssistantView):
@@ -38,6 +46,7 @@ class CalendarExportAPI(http.HomeAssistantView):
 
         # Generate ICS data
         cal = Calendar()
+        cal["VERSION"] = "2.0" # RFC5545 3.7.4
         cal["X-WR-CALNAME"] = entity.name
         cal["PRODID"] = "-//Home Assistant//Calendar Export//EN"
 
@@ -51,8 +60,10 @@ class CalendarExportAPI(http.HomeAssistantView):
 
         for event in events:
             e = Event()
-            e.add("uid", event.uid)
+            e.add("uid", uid(event.uid, event.start))
             e.add("summary", event.summary)
+            # TODO: migrate to date of last edit once exposed by homeassistant
+            e.add("dtstamp", datetime(1970, 1, 1, tzinfo=UTC))
             e.add("dtstart", event.start)
             e.add("dtend", event.end)
             if event.description:
